@@ -17,6 +17,9 @@ let score = 0;
 let roadSpeed = stripeSpeed;
 let enemySpawnRate = 0.02;
 let lastDifficultyIncrease = Date.now();
+let backgroundMusicState = "running"; // Tracks the state of background music
+
+const padding = 5; // Padding for hitbox tolerance
 
 // Load images
 const playerCarImage = new Image();
@@ -49,15 +52,40 @@ document.addEventListener("keyup", (e) => {
 const startButton = document.getElementById("startButton");
 const pauseButton = document.getElementById("pauseButton");
 const resumeButton = document.getElementById("resumeButton");
+const stopMusicButton = document.getElementById("stopMusicButton");
+const resumeMusicButton = document.getElementById("resumeMusicButton");
+
+stopMusicButton.addEventListener("click", () => {
+    if (backgroundMusicState === "running") {
+        bgAudio.pause();
+        backgroundMusicState = "paused";
+        stopMusicButton.style.display = "none";
+        resumeMusicButton.style.display = "inline-block";
+    }
+});
+
+resumeMusicButton.addEventListener("click", () => {
+    if (backgroundMusicState === "paused") {
+        bgAudio.play();
+        backgroundMusicState = "running";
+        resumeMusicButton.style.display = "none";
+        stopMusicButton.style.display = "inline-block";
+    }
+});
 
 startButton.addEventListener("click", () => {
-    startButton.style.display = "none";
-    pauseButton.style.display = "inline-block";
-    bgAudio.play(); // Play background music when the game starts
-    startCountdown(() => {
-        gameState = "playing";
-        loop();
-    });
+    if (gameState === "gameOver") {
+        restartGame(); // Ensure the game restarts properly on Game Over screen
+    } else {
+        startButton.style.display = "none";
+        pauseButton.style.display = "inline-block";
+        stopMusicButton.style.display = "inline-block"; // Show Stop Music button when game starts
+        bgAudio.play(); // Play background music when the game starts
+        startCountdown(() => {
+            gameState = "playing";
+            loop();
+        });
+    }
 });
 
 pauseButton.addEventListener("click", () => {
@@ -65,6 +93,7 @@ pauseButton.addEventListener("click", () => {
         gameState = "paused";
         pauseButton.style.display = "none";
         resumeButton.style.display = "inline-block";
+        renderStaticScene(); // Render the static scene when the game is paused
     }
 });
 
@@ -122,11 +151,38 @@ function startCountdown(callback) {
 
 function checkCollision(player, enemy) {
     return (
-        player.x < enemy.x + enemy.width &&
-        player.x + player.width > enemy.x &&
-        player.y < enemy.y + enemy.height &&
-        player.y + player.height > enemy.y
+        player.x + padding < enemy.x + enemy.width - padding &&
+        player.x + player.width - padding > enemy.x + padding &&
+        player.y + padding < enemy.y + enemy.height - padding &&
+        player.y + player.height - padding > enemy.y + padding
     );
+}
+
+function spawnEnemy() {
+    const laneWidth = (canvas.width - 200) / 4; // 4 lanes
+    const roadX = 100; // Starting X position of the road
+    const laneIndex = Math.floor(Math.random() * 4); // Choose a lane (0 to 3)
+
+    let enemy = {
+        x: 0,
+        y: -128,
+        width: 64,
+        height: 128,
+        speed: 3 + Math.random() * 2
+    };
+
+    const laneLeft = roadX + laneIndex * laneWidth;
+    const laneRight = laneLeft + laneWidth - enemy.width;
+
+    if (Math.random() < 0.2) { // 20% chance for a straddler car
+        enemy.width = enemy.width * 1.5; // Wider car
+        const maxX = laneLeft + laneWidth * 2 - enemy.width;
+        enemy.x = laneLeft + Math.random() * Math.max(0, maxX - laneLeft);
+    } else {
+        enemy.x = laneLeft + Math.random() * (laneRight - laneLeft); // Random X-offset in lane
+    }
+
+    enemies.push(enemy);
 }
 
 // Update game state
@@ -161,14 +217,7 @@ function update() {
 
     // Spawn new enemies
     if (Math.random() < enemySpawnRate) {
-        const lane = Math.floor(Math.random() * 4); // Adjusted for 4 lanes
-        enemies.push({
-            x: 100 + lane * ((canvas.width - 200) / 4) + ((canvas.width - 200) / 8) - 32,
-            y: -128,
-            width: 64,
-            height: 128,
-            speed: 3 + Math.random() * 2
-        });
+        spawnEnemy();
     }
 
     // Update score
@@ -243,16 +292,65 @@ function draw() {
     ctx.fillText(`Score: ${score}`, 10, 30);
 }
 
+let hue = 0; // Initial hue for the animation
+
+function drawFluorescentBorder() {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    gradient.addColorStop(0, `hsl(${hue}, 100%, 50%)`);
+    gradient.addColorStop(0.5, `hsl(${(hue + 120) % 360}, 100%, 50%)`);
+    gradient.addColorStop(1, `hsl(${(hue + 240) % 360}, 100%, 50%)`);
+
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = gradient;
+    ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+
+    hue = (hue + 1) % 360; // Increment hue for smooth transition
+}
+
+// Start the fluorescent border animation immediately on game load
+function startFluorescentAnimation() {
+    function animate() {
+        drawFluorescentBorder();
+        requestAnimationFrame(animate);
+    }
+    animate();
+}
+
+// Call the animation function on page load
+startFluorescentAnimation();
+
+function renderStaticScene() {
+    // Draw the static elements of the game
+    draw(); // Reuse the draw function to render the road, cars, and green area
+    drawFluorescentBorder(); // Ensure the border animation is visible
+}
+
+// Call renderStaticScene on game load
+renderStaticScene();
+
 // Game loop
 function loop() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Update and draw only if game is running
     if (gameState === "playing") {
         update();
         draw();
+        drawFluorescentBorder(); // Add the border animation
         requestAnimationFrame(loop);
+    } else if (gameState === "paused") {
+        draw(); // Render the static frame
+        drawFluorescentBorder(); // Keep the border animation running
+
+        // Overlay pause indicator
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = "48px sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+
+        requestAnimationFrame(loop); // Continue rendering the paused frame
     } else if (gameState === "gameOver") {
         // Stop background music
         bgAudio.pause();
@@ -273,21 +371,22 @@ function loop() {
         pauseButton.style.display = "none";
         resumeButton.style.display = "none";
 
-        // Listen for Enter key to restart
+        // Ensure the event listener is added only once
+        document.removeEventListener("keydown", handleRestart);
         document.addEventListener("keydown", handleRestart);
     }
 }
 
 function handleRestart(e) {
-    if (e.key === "Enter") {
-        document.removeEventListener("keydown", handleRestart);
+    if (e.key === "Enter" && gameState === "gameOver") {
+        document.removeEventListener("keydown", handleRestart); // Ensure listener is removed to avoid duplicates
         restartGame();
     }
 }
 
 function restartGame() {
     // Reset game variables
-    gameState = "paused";
+    gameState = "playing"; // Set game state to playing to restart the game loop
     score = 0;
     roadSpeed = stripeSpeed;
     enemySpawnRate = 0.02;
@@ -295,11 +394,16 @@ function restartGame() {
     enemies.length = 0;
     player.x = canvas.width / 2 - 32;
 
-    // Restart background music
-    bgAudio.play();
+    // Restart background music if running
+    if (backgroundMusicState === "running") {
+        bgAudio.currentTime = 0; // Reset music to the beginning
+        bgAudio.play();
+    }
 
-    // Show start button
-    startButton.style.display = "inline-block";
-    pauseButton.style.display = "none";
-    resumeButton.style.display = "none";
+    // Hide start button and show pause button
+    startButton.style.display = "none";
+    pauseButton.style.display = "inline-block";
+
+    // Restart the game loop
+    loop();
 }

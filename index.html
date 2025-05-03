@@ -12,7 +12,7 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
+            background-color: #000000; /* Set background color to black */
         }
         canvas {
             border: 5px solid #000;
@@ -45,6 +45,20 @@
         #pauseButton:hover, #resumeButton:hover {
             background-color: #0056b3;
         }
+        #stopMusicButton, #resumeMusicButton {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none; /* Initially hidden */
+        }
+        #stopMusicButton:hover, #resumeMusicButton:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -52,6 +66,8 @@
     <button id="startButton">Start Game</button>
     <button id="pauseButton">Pause Game</button>
     <button id="resumeButton">Resume Game</button>
+    <button id="stopMusicButton">Stop Music</button>
+    <button id="resumeMusicButton">Resume Music</button>
     <script src="game.js"></script>
 </body>
 </html>
