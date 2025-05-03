@@ -24,6 +24,19 @@ playerCarImage.src = "Assets/greencar.png";
 const enemyCarImage = new Image();
 enemyCarImage.src = "Assets/redcar.png";
 
+// Load tree image for fields
+const treeImage = new Image();
+treeImage.src = "Assets/tree.png";
+
+// Add error handling for images
+playerCarImage.onerror = () => console.error("Failed to load player car image.");
+enemyCarImage.onerror = () => console.error("Failed to load enemy car image.");
+treeImage.onerror = () => console.error("Failed to load tree image.");
+
+// Load background music
+const bgAudio = new Audio('Assets/background music.mp3');
+bgAudio.loop = true;
+
 // Event listeners for player movement
 document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft" || e.key === "a") player.vx = -5;
@@ -40,6 +53,7 @@ const resumeButton = document.getElementById("resumeButton");
 startButton.addEventListener("click", () => {
     startButton.style.display = "none";
     pauseButton.style.display = "inline-block";
+    bgAudio.play(); // Play background music when the game starts
     startCountdown(() => {
         gameState = "playing";
         loop();
@@ -129,9 +143,16 @@ function update() {
 
     // Move enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
-        enemies[i].y += enemies[i].speed;
-        if (enemies[i].y > canvas.height) enemies.splice(i, 1);
-        if (checkCollision(player, enemies[i])) {
+        const enemy = enemies[i];
+        if (!enemy) continue; // Skip undefined enemies
+
+        enemy.y += enemy.speed;
+        if (enemy.y > canvas.height) {
+            enemies.splice(i, 1);
+            continue;
+        }
+
+        if (checkCollision(player, enemy)) {
             gameState = "gameOver";
             console.log("Game Over!"); // Placeholder for explosion sound/animation
             return;
@@ -140,9 +161,9 @@ function update() {
 
     // Spawn new enemies
     if (Math.random() < enemySpawnRate) {
-        const lane = Math.floor(Math.random() * 3);
+        const lane = Math.floor(Math.random() * 4); // Adjusted for 4 lanes
         enemies.push({
-            x: 100 + lane * 200 + 50 - 32,
+            x: 100 + lane * ((canvas.width - 200) / 4) + ((canvas.width - 200) / 8) - 32,
             y: -128,
             width: 64,
             height: 128,
@@ -166,25 +187,54 @@ function draw() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw road and shoulders
-    ctx.fillStyle = "#808080"; // Road
-    ctx.fillRect(100, 0, canvas.width - 200, canvas.height);
-    ctx.fillStyle = "#A0A0A0"; // Shoulders
+    // Draw fields (green background)
+    ctx.fillStyle = "#228B22"; // Green for fields
     ctx.fillRect(0, 0, 100, canvas.height);
     ctx.fillRect(canvas.width - 100, 0, 100, canvas.height);
 
-    // Draw road stripes
+    // Draw driving surface (dark road)
+    ctx.fillStyle = "#404040"; // Dark gray for road
+    ctx.fillRect(100, 0, canvas.width - 200, canvas.height);
+
+    // Draw lane markers (white dashes)
     ctx.fillStyle = "#FFFFFF";
-    for (let y = -40 + stripeOffset; y < canvas.height; y += 80) {
-        ctx.fillRect(canvas.width / 2 - 5, y, 10, 40);
+    const laneWidth = (canvas.width - 200) / 4; // 4 lanes
+    for (let lane = 1; lane < 4; lane++) {
+        const laneX = 100 + lane * laneWidth;
+        for (let y = -40 + stripeOffset; y < canvas.height; y += 80) {
+            ctx.fillRect(laneX - 5, y, 10, 40);
+        }
     }
 
+    // Remove tree rendering logic if tree.png is missing
+    if (!treeImage.complete || treeImage.naturalWidth === 0) {
+        console.warn("Tree image not found. Skipping tree rendering.");
+    } else {
+        // Draw trees in the fields
+        for (let y = 0; y < canvas.height; y += 150) {
+            ctx.drawImage(treeImage, Math.random() * 80, y, 50, 50);
+            ctx.drawImage(treeImage, canvas.width - 100 + Math.random() * 80, y, 50, 50);
+        }
+    }
+
+    // Debug: Log player and enemy positions
+    console.log("Player position:", player.x, player.y);
+    console.log("Enemies:", enemies);
+
     // Draw player car
-    ctx.drawImage(playerCarImage, player.x, player.y, player.width, player.height);
+    if (playerCarImage.complete && playerCarImage.naturalWidth !== 0) {
+        ctx.drawImage(playerCarImage, player.x, player.y, player.width, player.height);
+    } else {
+        console.warn("Player car image not loaded or invalid");
+    }
 
     // Draw enemies
     for (const enemy of enemies) {
-        ctx.drawImage(enemyCarImage, enemy.x, enemy.y, enemy.width, enemy.height);
+        if (enemyCarImage.complete && enemyCarImage.naturalWidth !== 0) {
+            ctx.drawImage(enemyCarImage, enemy.x, enemy.y, enemy.width, enemy.height);
+        } else {
+            console.warn("Enemy car image not loaded or invalid");
+        }
     }
 
     // Draw score
@@ -204,14 +254,52 @@ function loop() {
         draw();
         requestAnimationFrame(loop);
     } else if (gameState === "gameOver") {
-        // Show end screen
-        ctx.fillStyle = "#000000";
+        // Stop background music
+        bgAudio.pause();
+        bgAudio.currentTime = 0;
+
+        // Show end screen overlay
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "bold 40px Arial";
         ctx.textAlign = "center";
-        ctx.fillText("Game Over", canvas.width / 2, canvas.height / 2 - 20);
+        ctx.fillText(`Game Over - Your Score: ${score}`, canvas.width / 2, canvas.height / 2 - 20);
         ctx.font = "20px Arial";
-        ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText("Press Enter to Restart", canvas.width / 2, canvas.height / 2 + 20);
+
+        // Show start button and hide pause/resume buttons
+        startButton.style.display = "inline-block";
+        pauseButton.style.display = "none";
+        resumeButton.style.display = "none";
+
+        // Listen for Enter key to restart
+        document.addEventListener("keydown", handleRestart);
     }
+}
+
+function handleRestart(e) {
+    if (e.key === "Enter") {
+        document.removeEventListener("keydown", handleRestart);
+        restartGame();
+    }
+}
+
+function restartGame() {
+    // Reset game variables
+    gameState = "paused";
+    score = 0;
+    roadSpeed = stripeSpeed;
+    enemySpawnRate = 0.02;
+    lastDifficultyIncrease = Date.now();
+    enemies.length = 0;
+    player.x = canvas.width / 2 - 32;
+
+    // Restart background music
+    bgAudio.play();
+
+    // Show start button
+    startButton.style.display = "inline-block";
+    pauseButton.style.display = "none";
+    resumeButton.style.display = "none";
 }
